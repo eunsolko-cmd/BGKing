@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#F2F4F9">
+<title>BG King</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@700&family=Noto+Sans+KR:wght@400;500;700&display=swap">
+<style>
+/* 레이아웃: 폰 한 화면 기준 한 줄 기둥. 큰 날짜, 아바타, 큰 버튼 하나, 오늘의 한마디 카드 순서 */
+:root {
+  --bg: #F2F4F9; --surface: #FFFFFF; --fg: #1B2230; --muted: #5B6579; --line: #D5DBE8;
+  --accent: #2F4C8C; --on-accent: #FFFFFF;
+  --font-display: "Gowun Batang", serif;
+  --font-body: "Noto Sans KR", system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #11151E; --surface: #1A2030; --fg: #EEF0F4; --muted: #AAB0BC; --line: #2C3550;
+    --accent: #E9C45A; --on-accent: #14161C; color-scheme: dark;
+  }
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: var(--bg); color: var(--fg); font-family: var(--font-body); font-size: 20px; line-height: 1.6;
+  min-height: 100vh;
+  padding-block: max(28px, env(safe-area-inset-top, 0px)) max(36px, env(safe-area-inset-bottom, 0px));
+  padding-left: max(18px, env(safe-area-inset-left, 0px));
+  padding-right: max(18px, env(safe-area-inset-right, 0px));
+}
+main { max-width: 440px; margin: 0 auto; display: flex; flex-direction: column; gap: 22px; }
+.date { text-align: center; color: var(--muted); font-size: 20px; margin: 0; }
+h1 { font-family: var(--font-display); font-size: 34px; line-height: 1.25; margin: 0; text-align: center; text-wrap: balance; }
+.stage { position: relative; width: 100%; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+#pet { display: block; width: 100%; height: auto; aspect-ratio: 56 / 52; image-rendering: pixelated; cursor: pointer; }
+.bubble { position: absolute; left: 0; right: 0; margin: 0 auto; width: max-content; top: 3%; padding: 4px 16px; border-radius: 16px; background: var(--bg); border: 2px solid var(--accent); color: var(--accent); font-weight: 700; font-size: 26px; white-space: nowrap; animation: pop .25s ease-out; }
+@keyframes pop { from { transform: scale(.4); } to { transform: scale(1); } }
+button { font: inherit; cursor: pointer; }
+button:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+.big { width: 100%; min-height: 72px; font-size: 26px; font-weight: 700; border: 0; border-radius: 16px; background: var(--accent); color: var(--on-accent); }
+.big:active { transform: scale(.98); }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 20px; display: flex; flex-direction: column; gap: 14px; }
+.card h2 { margin: 0; font-size: 16px; font-weight: 500; letter-spacing: .06em; color: var(--muted); }
+.msg { margin: 0; font-family: var(--font-display); font-size: 26px; line-height: 1.5; text-wrap: balance; }
+.from { margin: 0; color: var(--muted); font-size: 18px; text-align: right; }
+.next { min-height: 56px; font-size: 20px; border-radius: 12px; border: 2px solid var(--accent); background: transparent; color: var(--accent); font-weight: 500; }
+.note { text-align: center; color: var(--muted); font-size: 15px; margin: 0; }
+@media (prefers-reduced-motion: reduce) { .bubble { animation: none; } }
+</style>
+</head>
+<body>
+<main>
+  <p class="date" id="date"></p>
+  <h1>BG King</h1>
+
+  <div class="stage">
+    <canvas id="pet" width="56" height="52" role="img" aria-label="움직이는 픽셀 아바타 왕"></canvas>
+    <div class="bubble" id="bubble" hidden></div>
+  </div>
+
+  <button class="big" id="happy" type="button">기분 좋아요!</button>
+
+  <section class="card" aria-label="오늘의 한마디">
+    <h2>오늘의 한마디</h2>
+    <p class="msg" id="msg"></p>
+    <p class="from">- 딸이</p>
+    <button class="next" id="next" type="button">다른 말 보기</button>
+  </section>
+
+  <p class="note">시범 버전이에요. 필요한 기능을 말씀해 주시면 바꿀게요.</p>
+</main>
+
+<script>
+(function () {
+  var cv = document.getElementById("pet"), g = cv.getContext("2d");
+  var W = 56, OFFY = 12, GROUND = 50;
+  var SKIN = "#F6CFA8", HAIR = "#3B3B44", EYE = "#2A1E1A", PINK = "#F4A3A8", GOLD = "#F2C230";
+  var FX = [[0, 0, 1, 0, 0], [0, 1, 1, 1, 0], [1, 1, 1, 1, 1], [0, 1, 1, 1, 0], [0, 1, 0, 1, 0]], FX_COLOR = "#F2C230";
+  var MESSAGES = ["왕께서 오늘도 든든하십니다", "오늘도 건강하세요", "BG King 최고!", "점심 거르지 마세요", "스트레칭 한 번 하고 가요", "아버지 덕분에 마음이 놓여요", "오늘도 수고하셨습니다", "무리하지 말고 천천히 하세요"];
+  var BUBBLE = "만세!";
+  var mode = "idle", start = 0, parts = [], lastFx = 0, lastFrame = 0;
+  var bubble = document.getElementById("bubble"), actx = null;
+
+  function rect(x, y, w, h, c) { g.fillStyle = c; g.fillRect(Math.round(x), Math.round(y), w, h); }
+
+  
+  var ROBE = "#2F4C8C", CAPE = "#B32A3A";
+  function back(R) { R(-7, 22, 14, 13, CAPE); }
+  function body(R, up, w) {
+    R(-4, 32, 3, 4, "#33404D"); R(1, 32, 3, 4, "#33404D");
+    R(-5, 36, 4, 2, "#5A3A2A"); R(1, 36, 4, 2, "#5A3A2A");
+    R(-5, 22, 10, 10, ROBE); R(-5, 22, 10, 2, "#FFFFFF"); R(-5, 28, 10, 1, GOLD);
+    if (up) {
+      R(-8, 16, 2, 7, ROBE); R(-8, 14 - w, 2, 2, SKIN);
+      R(6, 16, 2, 7, ROBE); R(6, 13 + w, 2, 2, SKIN);
+    } else {
+      R(-7, 23, 2, 7, ROBE); R(5, 23, 2, 7, ROBE);
+      R(-7, 30, 2, 2, SKIN); R(5, 30, 2, 2, SKIN);
+    }
+  }
+  function front(R) {
+    R(-7, 7, 14, 3, HAIR); R(-7, 10, 2, 4, HAIR); R(5, 10, 2, 4, HAIR);
+    R(-3, 17, 6, 1, HAIR);
+    R(-5, 4, 10, 3, GOLD); R(-5, 2, 2, 2, GOLD); R(-1, 1, 2, 3, GOLD); R(3, 2, 2, 2, GOLD);
+    R(0, 5, 1, 1, "#C0392B");
+  }
+
+
+  function avatar(cx, dy, face, blink, now) {
+    function R(x, y, w, h, c) { rect(cx + x, y + dy + OFFY, w, h, c); }
+    var up = face === "happy", w = Math.floor(now / 120) % 2;
+    rect(cx - 6, GROUND, 12, 1, "rgba(0,0,0,.2)");
+    back(R);
+    body(R, up, w);
+    R(-6, 10, 12, 11, SKIN);
+    front(R);
+    if (face === "happy") {
+      [[-5,16],[-4,15],[-3,16],[2,16],[3,15],[4,16]].forEach(function (p) { R(p[0], p[1], 1, 1, EYE); });
+      R(-2, 18, 4, 2, "#7A2E2E"); R(-1, 19, 2, 1, "#F28C8C");
+      R(-6, 17, 2, 2, PINK); R(4, 17, 2, 2, PINK);
+    } else {
+      if (blink) { R(-4, 16, 2, 1, EYE); R(2, 16, 2, 1, EYE); }
+      else { R(-4, 15, 2, 2, EYE); R(2, 15, 2, 2, EYE); }
+      R(-1, 19, 2, 1, "#B5575A");
+      R(-5, 17, 2, 1, PINK); R(3, 17, 2, 1, PINK);
+    }
+  }
+
+  function chime() {
+    if (!actx) { try { actx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {} }
+    if (!actx) return;
+    try {
+      if (actx.state === "suspended") actx.resume();
+      var t = actx.currentTime;
+      [660, 880, 1100].forEach(function (fr, i) {
+        var o = actx.createOscillator(), gg = actx.createGain();
+        o.type = "sine"; o.frequency.value = fr;
+        gg.gain.setValueAtTime(0.0001, t + i * 0.12);
+        gg.gain.exponentialRampToValueAtTime(0.18, t + i * 0.12 + 0.02);
+        gg.gain.exponentialRampToValueAtTime(0.0001, t + i * 0.12 + 0.2);
+        o.connect(gg); gg.connect(actx.destination);
+        o.start(t + i * 0.12); o.stop(t + i * 0.12 + 0.22);
+      });
+    } catch (e) {}
+  }
+
+  function frame(now) {
+    var dt = lastFrame ? Math.min(0.05, (now - lastFrame) / 1000) : 0.016;
+    lastFrame = now;
+    var e = (now - start) / 1000, cx = 28, dy = 0, face = "idle", blink = false;
+    if (mode === "idle") {
+      dy = Math.floor(now / 450) % 2;
+      blink = now % 3200 < 140;
+    } else {
+      dy = -Math.round(Math.abs(Math.sin(e * Math.PI * 1.8)) * 4);
+      face = "happy";
+      if (now - lastFx > 140) {
+        lastFx = now;
+        parts.push({ x: cx - 9 + Math.random() * 14, y: 10 + Math.random() * 6, seed: Math.random() * 6, age: 0, life: 1.4 });
+      }
+      if (e > 1.9) bubble.hidden = true;
+      if (e > 2.2) mode = "idle";
+    }
+    g.clearRect(0, 0, cv.width, cv.height);
+    rect(0, GROUND, W, 2, "rgba(128,128,128,.18)");
+    avatar(cx, dy, face, blink, now);
+    parts = parts.filter(function (p) {
+      p.age += dt; p.y -= 14 * dt; p.x += Math.sin(p.age * 6 + p.seed) * 5 * dt;
+      return p.age < p.life;
+    });
+    parts.forEach(function (p) {
+      g.globalAlpha = Math.max(0, Math.min(1, (p.life - p.age) / 0.5));
+      FX.forEach(function (row, ry) { row.forEach(function (v, rx) { if (v) rect(p.x + rx, p.y + ry, 1, 1, FX_COLOR); }); });
+      g.globalAlpha = 1;
+    });
+    requestAnimationFrame(frame);
+  }
+
+  function cheer() {
+    mode = "happy"; start = performance.now();
+    bubble.textContent = BUBBLE; bubble.hidden = false;
+    chime();
+  }
+  document.getElementById("happy").addEventListener("click", cheer);
+  cv.addEventListener("click", cheer);
+
+  var DAYS = ["일", "월", "화", "수", "목", "금", "토"];
+  var now = new Date();
+  document.getElementById("date").textContent = "오늘은 " + (now.getMonth() + 1) + "월 " + now.getDate() + "일 " + DAYS[now.getDay()] + "요일";
+  var idx = (now.getFullYear() * 400 + now.getMonth() * 31 + now.getDate()) % MESSAGES.length;
+  var msgEl = document.getElementById("msg");
+  function showMsg() { msgEl.textContent = MESSAGES[idx]; }
+  document.getElementById("next").addEventListener("click", function () { idx = (idx + 1) % MESSAGES.length; showMsg(); });
+  showMsg();
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
